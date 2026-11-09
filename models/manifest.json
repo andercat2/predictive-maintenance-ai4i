@@ -1,0 +1,48 @@
+{
+  "versions": {
+    "python": "3.9.6",
+    "scikit-learn": "1.6.1",
+    "lightgbm": "4.6.0",
+    "catboost": "1.2.10",
+    "xgboost": "2.1.4",
+    "numpy": "2.0.2",
+    "joblib": "1.5.3",
+    "pandas": "2.3.3"
+  },
+  "models": {
+    "best_binary_model.joblib": {
+      "sha256": "54f489c75068652ba34b59741a0bcd84884bf9094ceedf9e799f196634b5b25e",
+      "model_name": "Ансамбль (soft voting: Random Forest + CatBoost (tuned) + LightGBM (tuned))",
+      "created": "2026-11-09T16:51:24",
+      "threshold": 0.5120167554324541,
+      "features": [
+        "type_code",
+        "air_temp_k",
+        "process_temp_k",
+        "rpm",
+        "torque_nm",
+        "tool_wear_min",
+        "temp_diff_k",
+        "power_w",
+        "strain_nm_min"
+      ]
+    },
+    "best_failure_type_model.joblib": {
+      "sha256": "42a73bd8f52d787aabc0c1bb4a3ef731ba10679de495a36e41c9ef8c5ddb5476",
+      "model_name": "Random Forest",
+      "created": "2026-11-09T16:52:50",
+      "threshold": null,
+      "features": [
+        "type_code",
+        "air_temp_k",
+        "process_temp_k",
+        "rpm",
+        "torque_nm",
+        "tool_wear_min",
+        "temp_diff_k",
+        "power_w",
+        "strain_nm_min"
+      ]
+    }
+  }
+}

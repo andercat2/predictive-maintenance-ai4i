@@ -92,6 +92,10 @@ https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset
 | Путь | Что внутри |
 |---|---|
 | `pdm_pipeline.py` | весь пайплайн: данные → признаки → модели → метрики → отчёт |
+| `pdm_features.py` | единые формулы признаков и проверка входных данных, общие для обучения и инференса |
+| `predict.py` | инференс: прогноз отказа и вероятной причины (CLI и Python API) |
+| `tests/` | тесты инференса (pytest) |
+| `models/manifest.json` | SHA-256 файлов моделей, версии библиотек, порог, список признаков |
 | `results/metrics_models.xlsx` | **главный файл с метриками**: итоги, тест, CV, экономика, тип отказа, матрицы ошибок, важность признаков, вклад feature engineering, гиперпараметры, описание метрик, графики |
 | `results/metrics_binary.csv`, `results/metrics_multiclass.csv` | сводные таблицы в CSV |
 | `results/figures/` | графики |
@@ -103,25 +107,53 @@ https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset
 
 ## Запуск
 
+Python 3.9, версии библиотек зафиксированы точно.
+
 ```bash
 pip install -r requirements.txt   # на macOS для xgboost/lightgbm: brew install libomp
 python pdm_pipeline.py            # около 3 минут, результат воспроизводим (seed 42)
 python build_demo.py
+python -m pytest tests            # 11 тестов инференса
 ```
 
-## Использование обученной модели
+## Инференс
+
+На вход подаются класс изделия и 5 показаний датчиков. Признаки модель считает сама.
+
+```bash
+# одна запись
+python predict.py --json '{"type": "L", "air_temp_k": 300, "process_temp_k": 310, "rpm": 1320, "torque_nm": 58, "tool_wear_min": 205}'
+
+# пакет из CSV (колонки AI4I или короткие: type, air_temp_k, process_temp_k, rpm, torque_nm, tool_wear_min)
+python predict.py --input sensors.csv --output predictions.csv
+```
+
+```json
+{"risk": 0.9007, "status": "тревога", "alarm": true,
+ "likely_cause": "OSF", "likely_cause_ru": "механическая перегрузка", "likely_cause_p": 0.993, "notes": ""}
+```
+
+Из кода:
 
 ```python
-import joblib
-import pandas as pd
+from predict import Predictor
 
-b = joblib.load("models/best_binary_model.joblib")
-X = pd.DataFrame(...)                      # колонки: b["features"]
-risk = b["model"].predict_proba(X[b["features"]])[:, 1]
-alarm = risk >= b["threshold"]
+pred = Predictor.load("models")
+result = pred.predict(df)   # df с показаниями -> risk, status, alarm, likely_cause, notes
 ```
 
-Признаки `temp_diff_k`, `power_w`, `strain_nm_min` и `type_code` (L=0, M=1, H=2) считаются так же, как в функции `load_data()` пайплайна.
+| Поле | Значение |
+|---|---|
+| `risk` | вероятность отказа от 0 до 1 |
+| `status` | `норма` / `наблюдение` (риск ≥ порог/3) / `тревога` (риск ≥ 0.512) / `ошибка данных` |
+| `likely_cause` | вероятный тип отказа (TWF, HDF, PWF, OSF, Прочее), только при наблюдении или тревоге |
+| `notes` | проблемы входных данных |
+
+**Как устроена надёжность инференса:**
+- **Одни формулы признаков.** И обучение, и прогноз вызывают `make_features()` из `pdm_features.py`, поэтому признаки не могут разойтись.
+- **Проверка входа.** Пропуск, неизвестный класс изделия или физически невозможное значение дают статус `ошибка данных`, прогноз не делается. Значения вне диапазона обучения прогнозируются, но с предупреждением в `notes`.
+- **Проверка файла модели.** Перед загрузкой сверяется SHA-256 из `models/manifest.json`. joblib (pickle) может выполнить код при загрузке, поэтому изменённый файл не открывается вообще. Загружайте модели только из доверенного источника.
+- **Проверка версий.** Если версии scikit-learn, LightGBM, CatBoost, XGBoost, NumPy или joblib не совпадают с теми, в которых сохранена модель, загрузка прерывается.
 
 ## Ограничения
 
