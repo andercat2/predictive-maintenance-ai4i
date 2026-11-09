@@ -8,3 +8,4 @@ results_run.log
 data/raw/*.zip
 demo/_artifact_body.html
 .DS_Store
+.pytest_cache/

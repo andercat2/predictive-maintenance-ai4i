@@ -1,9 +1,16 @@
-pandas>=2.0
-numpy>=1.24
-scikit-learn>=1.4
-xgboost>=2.0
-lightgbm>=4.0
-catboost>=1.2
-openpyxl>=3.1
-matplotlib>=3.7
-joblib>=1.3
+# Точные версии: сохранённые модели (joblib) загружаются только с ними.
+# predict.py сверяет их с models/manifest.json и откажется загружать модель при расхождении.
+# Проверено на Python 3.9.
+catboost==1.2.10
+joblib==1.5.3
+lightgbm==4.6.0
+numpy==2.0.2
+pandas==2.3.3
+scikit-learn==1.6.1
+scipy==1.13.1
+xgboost==2.1.4
+
+# Только для отчётов и тестов
+matplotlib==3.9.4
+openpyxl==3.1.5
+pytest==8.4.2

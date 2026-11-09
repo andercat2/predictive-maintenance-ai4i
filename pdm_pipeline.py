@@ -58,6 +58,8 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 
+from pdm_features import ENG_FEATURES, FEATURES, RAW_FEATURES, make_features, runtime_versions, training_ranges
+
 warnings.filterwarnings("ignore")
 
 # ----------------------------------------------------------------------------------------
@@ -81,10 +83,6 @@ COST_UNPLANNED_FAILURE = 1_000_000  # пропущенный отказ: ава�
 COST_PLANNED_REPAIR = 150_000       # отказ предсказан: плановое ТО до поломки
 COST_FALSE_ALARM = 30_000           # ложная тревога: лишний осмотр / остановка
 
-TYPE_MAP = {"L": 0, "M": 1, "H": 2}
-RAW_FEATURES = ["type_code", "air_temp_k", "process_temp_k", "rpm", "torque_nm", "tool_wear_min"]
-ENG_FEATURES = ["temp_diff_k", "power_w", "strain_nm_min"]
-FEATURES = RAW_FEATURES + ENG_FEATURES
 
 FEATURE_RU = {
     "type_code": "Тип изделия (L/M/H)",
@@ -113,17 +111,8 @@ FAILURE_RU = {
 # ----------------------------------------------------------------------------------------
 def load_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH, encoding="utf-8-sig")
-    df = df.rename(columns={
-        "UDI": "udi", "Product ID": "product_id", "Type": "type",
-        "Air temperature [K]": "air_temp_k", "Process temperature [K]": "process_temp_k",
-        "Rotational speed [rpm]": "rpm", "Torque [Nm]": "torque_nm",
-        "Tool wear [min]": "tool_wear_min", "Machine failure": "failure",
-    })
-    df["type_code"] = df["type"].map(TYPE_MAP)
-    # Физически обоснованные признаки (feature engineering)
-    df["temp_diff_k"] = df["process_temp_k"] - df["air_temp_k"]           # теплоотвод -> HDF
-    df["power_w"] = df["torque_nm"] * df["rpm"] * 2 * np.pi / 60           # мощность -> PWF
-    df["strain_nm_min"] = df["tool_wear_min"] * df["torque_nm"]            # перегрузка -> OSF
+    # Физически обоснованные признаки — единая функция для обучения и инференса (pdm_features.py)
+    df = make_features(df)
 
     # Метка типа отказа (для отказов с несколькими режимами — по приоритету)
     def failure_type(r):
@@ -290,6 +279,29 @@ def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def save_model(bundle: dict, filename: str) -> None:
+    """Сохраняет модель и обновляет models/manifest.json.
+
+    В манифест пишутся SHA-256 файла и версии библиотек: predict.py сверяет их ДО загрузки,
+    потому что joblib (pickle) можно безопасно открывать только из проверенного источника.
+    """
+    import hashlib
+
+    versions = runtime_versions()
+    bundle = {**bundle, "versions": versions, "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    path = MODELS_DIR / filename
+    joblib.dump(bundle, path)
+    sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    man_path = MODELS_DIR / "manifest.json"
+    manifest = json.loads(man_path.read_text(encoding="utf-8")) if man_path.exists() else {}
+    manifest["versions"] = versions
+    manifest.setdefault("models", {})[filename] = {
+        "sha256": sha, "model_name": bundle.get("model_name"), "created": bundle["created"],
+        "threshold": bundle.get("threshold"), "features": bundle["features"],
+    }
+    man_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 # ----------------------------------------------------------------------------------------
 # Основной сценарий
 # ----------------------------------------------------------------------------------------
@@ -382,7 +394,9 @@ def main():
     log(f"Лучшая модель по CV PR-AUC: {best_name}")
     best_model = fitted[best_name]
     best_thr = float(test_df.loc[test_df["Модель"] == best_name, "Порог"].iloc[0])
-    joblib.dump({"model": best_model, "threshold": best_thr, "features": FEATURES}, MODELS_DIR / "best_binary_model.joblib")
+    train_rng = training_ranges(df.loc[idx_tr])
+    save_model({"model": best_model, "model_name": best_name, "threshold": best_thr, "watch_threshold": best_thr / 3,
+                "features": FEATURES, "train_ranges": train_rng}, "best_binary_model.joblib")
 
     # ---------- 1d. Вклад feature engineering ----------
     log("Сравнение: исходные признаки vs + инженерные признаки")
@@ -436,7 +450,8 @@ def main():
     mc_df.insert(0, "Ранг", range(1, len(mc_df) + 1))
     best_mc = mc_df.iloc[0]["Модель"]
     log(f"Лучшая мультикласс-модель: {best_mc}")
-    joblib.dump({"model": mc_fitted[best_mc], "label_encoder": le, "features": FEATURES}, MODELS_DIR / "best_failure_type_model.joblib")
+    save_model({"model": mc_fitted[best_mc], "model_name": best_mc, "label_encoder": le, "features": FEATURES,
+                "train_ranges": train_rng}, "best_failure_type_model.joblib")
 
     rep = classification_report(y_mc_te, mc_preds[best_mc], labels=le.transform(classes_order),
                                 target_names=[FAILURE_RU[c] for c in classes_order], output_dict=True, zero_division=0)
