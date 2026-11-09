@@ -1,0 +1,627 @@
+<title>Предиктивный ремонт станков</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: инженерная панель — сводка сверху, затем живой симулятор, парк, экономика, качество моделей, методика */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #17212c;
+  --ink-2: #4a5867;
+  --ink-3: #7b8896;
+  --line: #d6dde4;
+  --line-2: #e7ecf0;
+  --accent: #0f6b8f;
+  --accent-soft: #dbecf3;
+  --ok: #2c8a57;
+  --ok-soft: #dff1e6;
+  --warn: #b47a00;
+  --warn-soft: #fbefd2;
+  --crit: #c23d2a;
+  --crit-soft: #f9e0dc;
+  --bar-muted: #b8c7d3;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11171d; --panel: #18212a; --ink: #e4eaf0; --ink-2: #a9b6c3; --ink-3: #7c8a98;
+    --line: #2b3742; --line-2: #222c36; --accent: #4fb3d9; --accent-soft: #173444;
+    --ok: #4cc07f; --ok-soft: #173826; --warn: #e2a93a; --warn-soft: #3a2e14;
+    --crit: #f0705b; --crit-soft: #44201b; --bar-muted: #3d5163; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11171d; --panel: #18212a; --ink: #e4eaf0; --ink-2: #a9b6c3; --ink-3: #7c8a98;
+  --line: #2b3742; --line-2: #222c36; --accent: #4fb3d9; --accent-soft: #173444;
+  --ok: #4cc07f; --ok-soft: #173826; --warn: #e2a93a; --warn-soft: #3a2e14;
+  --crit: #f0705b; --crit-soft: #44201b; --bar-muted: #3d5163; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: 0.005em; }
+h1 { font-size: clamp(28px, 4.2vw, 40px); font-weight: 700; line-height: 1.1; }
+h2 { font-size: 24px; font-weight: 600; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; }
+.mono, .num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.lede { color: var(--ink-2); max-width: 68ch; }
+.muted { color: var(--ink-3); font-size: 13px; }
+section { display: grid; gap: 14px; min-width: 0; }
+.sec-head { display: grid; gap: 4px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; min-width: 0; }
+
+/* header */
+header.top { display: grid; gap: 14px; }
+.plate { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-3); }
+.plate b { color: var(--ink-2); font-weight: 500; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.kpi { padding: 16px 18px; display: grid; gap: 2px; border-left: 1px solid var(--line-2); min-width: 0; }
+.kpi:first-child { border-left: 0; }
+.kpi .v { font-family: var(--f-display); font-size: 32px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 13px; color: var(--ink-2); }
+.kpi .s { font-size: 12px; color: var(--ink-3); font-family: var(--f-mono); }
+
+/* flow */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; }
+.step { padding: 14px 16px 14px 0; display: grid; gap: 4px; align-content: start; position: relative; min-width: 0; }
+.step + .step { padding-left: 22px; }
+.step + .step::before { content: ""; position: absolute; left: 0; top: 22px; width: 12px; height: 12px; border-top: 2px solid var(--accent); border-right: 2px solid var(--accent); transform: rotate(45deg); }
+.step .k { font-family: var(--f-mono); font-size: 12px; color: var(--accent); }
+.step .t { font-family: var(--f-display); font-weight: 600; font-size: 16px; }
+.step .d { font-size: 13px; color: var(--ink-2); }
+
+/* simulator */
+.sim { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; }
+.controls { display: grid; gap: 14px; align-content: start; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; cursor: pointer; }
+.chip { border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.chip:focus-visible, input:focus-visible, .seg button:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.field { display: grid; gap: 4px; }
+.field .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.field label { font-size: 13px; color: var(--ink-2); }
+.field output { font-family: var(--f-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--ink-2); padding: 5px 14px; font-family: var(--f-mono); font-size: 13px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+
+.readout { display: grid; gap: 16px; align-content: start; }
+.verdict { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.risk-big { font-family: var(--f-display); font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.risk-big small { font-size: 22px; font-weight: 600; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.st-ok { color: var(--ok); background: var(--ok-soft); }
+.st-warn { color: var(--warn); background: var(--warn-soft); }
+.st-crit { color: var(--crit); background: var(--crit-soft); }
+.rec { font-size: 14px; color: var(--ink-2); margin-top: 6px; }
+.meter { position: relative; height: 10px; background: var(--line-2); border-radius: 5px; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--accent); transition: width .25s ease; }
+.meter .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+.scale { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+.sub { display: grid; gap: 8px; }
+.sub h3 { font-size: 15px; }
+.bars { display: grid; gap: 6px; }
+.bar { display: grid; grid-template-columns: minmax(0, 15ch) minmax(0, 1fr) 6ch; gap: 10px; align-items: center; font-size: 13px; }
+.bar .track { height: 8px; background: var(--line-2); border-radius: 4px; position: relative; overflow: hidden; }
+.bar .track i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 4px; transition: width .25s ease; }
+.bar .val { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.ind { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ind > div { border: 1px solid var(--line-2); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.ind .n { font-size: 12px; color: var(--ink-3); }
+.ind .x { font-family: var(--f-mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+.ind .r { font-size: 12px; }
+.ind .bad { color: var(--crit); }
+.ind .near { color: var(--warn); }
+.ind .good { color: var(--ok); }
+
+/* fleet */
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.table-wrap { overflow-x: auto; max-height: 460px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel); font-weight: 600; color: var(--ink-2); font-size: 12px; z-index: 1; border-bottom: 1px solid var(--line); }
+td.num, th.num { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--accent-soft); }
+.riskcell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.riskcell .t { width: 70px; height: 6px; background: var(--line-2); border-radius: 3px; position: relative; overflow: hidden; }
+.riskcell .t i { position: absolute; inset: 0 auto 0 0; }
+.tag { font-family: var(--f-mono); font-size: 12px; }
+.hit { color: var(--ok); } .miss { color: var(--crit); } .fa { color: var(--warn); }
+
+/* economics */
+.econ { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 18px; }
+.cost-in { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.cost-in label { font-size: 12px; color: var(--ink-3); display: grid; gap: 4px; }
+.cost-in input { font-family: var(--f-mono); font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); color: var(--ink); width: 100%; min-width: 0; }
+.cmx { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.cmx div { border-radius: var(--r); padding: 10px 12px; display: grid; gap: 2px; }
+.cmx .v { font-family: var(--f-display); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cmx .l { font-size: 12px; }
+.c-tp { background: var(--ok-soft); color: var(--ok); }
+.c-fn { background: var(--crit-soft); color: var(--crit); }
+.c-fp { background: var(--warn-soft); color: var(--warn); }
+.c-tn { background: var(--line-2); color: var(--ink-2); }
+.money { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.money > div { display: grid; gap: 2px; padding-right: 10px; min-width: 0; }
+.money .v { font-family: var(--f-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.money .l { font-size: 12px; color: var(--ink-3); }
+
+/* charts */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+svg text { fill: var(--ink-2); font-family: var(--f-mono); font-size: 11px; }
+svg .axis { stroke: var(--line); }
+svg .gridl { stroke: var(--line-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart-box { overflow-x: auto; }
+.cm-table td { text-align: center; font-family: var(--f-mono); padding: 6px 4px; min-width: 52px; }
+.cm-table th { position: static; text-align: center; white-space: normal; font-weight: 500; font-size: 11px; }
+.cm-table th.rowh { text-align: right; white-space: nowrap; }
+
+.notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.notes .panel { display: grid; gap: 8px; align-content: start; }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); font-size: 14px; }
+a { color: var(--accent); }
+
+@media (max-width: 900px) {
+  .sim, .econ, .grid2, .notes { grid-template-columns: minmax(0, 1fr); }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .step + .step { padding-left: 0; padding-top: 18px; }
+  .step + .step::before { left: 4px; top: 2px; transform: rotate(135deg); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi:nth-child(3) { border-left: 0; }
+  .kpi:nth-child(n+3) { border-top: 1px solid var(--line-2); }
+}
+@media (max-width: 480px) {
+  .ind, .cost-in, .money { grid-template-columns: minmax(0, 1fr); }
+  .money > div + div { padding-top: 8px; }
+  .verdict { grid-template-columns: minmax(0, 1fr); }
+  .bar { grid-template-columns: minmax(0, 11ch) minmax(0, 1fr) 6ch; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Пилот · предиктивное ТО · фрезерный участок</div>
+    <h1>Предиктивный ремонт и диагностика станков</h1>
+    <p class="lede">Система по показаниям датчиков оценивает вероятность отказа станка и называет вероятную причину: износ инструмента, перегрев, выход мощности за допуск или механическую перегрузку. Ниже показано, как она работает на открытых промышленных данных.</p>
+    <div class="plate" id="plate"></div>
+    <div class="kpis" id="kpis"></div>
+  </header>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Принцип работы</div><h2>От датчика до заявки на ТО</h2></div>
+    <div class="panel flow">
+      <div class="step"><span class="k">Вход</span><span class="t">Датчики станка</span><span class="d">Температура воздуха и процесса, обороты шпинделя, крутящий момент, наработка инструмента.</span></div>
+      <div class="step"><span class="k">Признаки</span><span class="t">Физика процесса</span><span class="d">Считаем разницу температур, механическую мощность и нагрузку на инструмент.</span></div>
+      <div class="step"><span class="k">Модель 1</span><span class="t">Риск отказа</span><span class="d">Ансамбль деревьев и бустингов выдаёт вероятность отказа от 0 до 100%.</span></div>
+      <div class="step"><span class="k">Модель 2</span><span class="t">Диагноз</span><span class="d">Вторая модель определяет тип неисправности: TWF, HDF, PWF или OSF.</span></div>
+      <div class="step"><span class="k">Действие</span><span class="t">Решение</span><span class="d">Выше порога — заявка на плановое ТО с указанием причины. Ниже — работа в штатном режиме.</span></div>
+    </div>
+  </section>
+
+  <section id="sim-sec">
+    <div class="sec-head"><div class="eyebrow">Живая демонстрация</div><h2>Симулятор станка</h2>
+      <p class="lede">Меняйте режим работы и смотрите, как реагирует модель. Модель работает прямо в браузере. Можно выбрать готовый сценарий или кликнуть по станку в таблице парка ниже.</p></div>
+    <div class="panel sim">
+      <div class="controls">
+        <div class="presets" id="presets" role="group" aria-label="Сценарии"></div>
+        <div class="field"><div class="row"><label>Класс изделия (L / M / H)</label></div>
+          <div class="seg" id="type-seg" role="group" aria-label="Класс изделия">
+            <button type="button" id="t-L" data-v="L">L</button><button type="button" id="t-M" data-v="M">M</button><button type="button" id="t-H" data-v="H">H</button>
+          </div></div>
+        <div id="sliders" class="controls"></div>
+      </div>
+      <div class="readout">
+        <div class="verdict">
+          <div class="risk-big"><span id="risk-num">—</span><small>%</small></div>
+          <div><span id="status" class="status st-ok">Норма</span><p class="rec" id="rec"></p></div>
+        </div>
+        <div>
+          <div class="meter"><div class="fill" id="risk-fill"></div><div class="mark" id="risk-mark" title="Порог тревоги"></div></div>
+          <div class="scale"><span>0%</span><span id="thr-lbl"></span><span>100%</span></div>
+        </div>
+        <div class="sub"><h3>Вероятная причина, если отказ произойдёт</h3><div class="bars" id="type-bars"></div></div>
+        <div class="sub"><h3>Инженерные индикаторы</h3><div class="ind" id="ind"></div>
+          <p class="muted">Пороги взяты из документации датасета. Модель не знает их заранее, она выучила их из данных.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Мониторинг</div><h2>Парк оборудования</h2>
+      <p class="lede" id="fleet-lede"></p></div>
+    <div class="toolbar">
+      <div class="presets" id="fleet-filter" role="group" aria-label="Фильтр">
+        <button type="button" class="chip" id="ff-all" data-f="all" aria-pressed="true">Все</button>
+        <button type="button" class="chip" id="ff-alarm" data-f="alarm" aria-pressed="false">Тревога</button>
+        <button type="button" class="chip" id="ff-watch" data-f="watch" aria-pressed="false">Наблюдение</button>
+        <button type="button" class="chip" id="ff-fail" data-f="fail" aria-pressed="false">Реальные отказы</button>
+      </div>
+      <span class="muted" id="fleet-count"></span>
+    </div>
+    <div class="table-wrap"><table id="fleet"><thead><tr>
+      <th>Станок</th><th>Класс</th><th class="num">Износ, мин</th><th class="num">Момент, Нм</th><th class="num">Обороты</th><th class="num">ΔT, K</th><th class="num">Риск</th><th>Статус</th><th>Прогноз причины</th><th>Факт</th>
+    </tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Экономика</div><h2>Порог тревоги и эффект</h2>
+      <p class="lede">Низкий порог ловит больше отказов, но даёт больше ложных остановок. Двигайте порог и подставьте стоимость своего простоя. Расчёт идёт на отложенной выборке, которую модель не видела при обучении.</p></div>
+    <div class="panel econ">
+      <div class="controls">
+        <div class="field"><div class="row"><label for="thr">Порог тревоги</label><output id="thr-out" class="num"></output></div>
+          <input type="range" id="thr" min="0.01" max="0.99" step="0.01"></div>
+        <div class="cost-in">
+          <label>Пропущенный отказ, ₽<input id="c-fn" type="number" step="10000" min="0"></label>
+          <label>Плановый ремонт, ₽<input id="c-tp" type="number" step="10000" min="0"></label>
+          <label>Ложная тревога, ₽<input id="c-fp" type="number" step="5000" min="0"></label>
+        </div>
+        <p class="muted">Стоимости условные, для демонстрации. Замените на данные предприятия.</p>
+        <div class="presets"><button type="button" class="chip" id="thr-f1">Порог модели (макс. F1)</button><button type="button" class="chip" id="thr-cost">Порог минимальных затрат</button></div>
+      </div>
+      <div class="controls">
+        <div class="cmx">
+          <div class="c-tp"><span class="v" id="m-tp"></span><span class="l">Отказ предсказан заранее</span></div>
+          <div class="c-fn"><span class="v" id="m-fn"></span><span class="l">Отказ пропущен</span></div>
+          <div class="c-fp"><span class="v" id="m-fp"></span><span class="l">Ложная тревога</span></div>
+          <div class="c-tn"><span class="v" id="m-tn"></span><span class="l">Норма, без вмешательства</span></div>
+        </div>
+        <div class="money">
+          <div><span class="l">Без системы</span><span class="v" id="e-base"></span></div>
+          <div><span class="l">С системой</span><span class="v" id="e-sys"></span></div>
+          <div><span class="l">Экономия</span><span class="v" id="e-save" style="color:var(--ok)"></span></div>
+        </div>
+        <p class="muted" id="e-note"></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Качество моделей</div><h2>Какая модель лучше</h2>
+      <p class="lede" id="models-lede"></p></div>
+    <div class="grid2">
+      <div class="panel sub"><h3>PR-AUC на отложенной выборке</h3><p class="muted">Главная метрика для редких отказов. Случайное угадывание даёт ≈ 0.034.</p><div class="chart-box" id="ch-models"></div></div>
+      <div class="panel sub"><h3>Precision–Recall кривые</h3><div class="legend" id="pr-legend"></div><div class="chart-box" id="ch-pr"></div></div>
+    </div>
+    <div class="table-wrap" style="max-height:none"><table id="mtable"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Диагностика</div><h2>Насколько точно определяется причина</h2>
+      <p class="lede" id="mc-lede"></p></div>
+    <div class="grid2">
+      <div class="panel sub"><h3>Полнота по типам отказа</h3><p class="muted">Доля случаев каждого типа, которые модель распознала верно.</p><div class="bars" id="mc-bars"></div></div>
+      <div class="panel sub"><h3>Матрица ошибок</h3><div class="chart-box"><table class="cm-table" id="cm"></table></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Объяснимость</div><h2>На что смотрит модель</h2>
+      <p class="lede">Насколько падает качество, если перемешать один признак. Чем длиннее полоса, тем важнее признак для прогноза.</p></div>
+    <div class="panel"><div class="bars" id="fi"></div></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Методика</div><h2>Данные и ограничения</h2></div>
+    <div class="notes">
+      <div class="panel"><h3>Данные</h3><ul id="n-data"></ul></div>
+      <div class="panel"><h3>Как проверяли</h3><ul>
+        <li>80% данных на обучение, 20% отложено и не участвует в обучении и подборе.</li>
+        <li>На обучающей части 5-кратная стратифицированная кросс-валидация.</li>
+        <li>Лучшая модель выбрана по кросс-валидации, а не по тесту.</li>
+        <li>Порог тревоги подобран на out-of-fold прогнозах.</li>
+        <li>Гиперпараметры бустингов подобраны случайным поиском.</li>
+      </ul></div>
+      <div class="panel"><h3>Ограничения</h3><ul>
+        <li>AI4I 2020 — синтетический датасет, построенный по реальному процессу. На данных завода метрики будут ниже.</li>
+        <li>Случайные отказы (RNF) по датчикам не предсказуемы в принципе.</li>
+        <li>Стоимости в экономическом блоке условные.</li>
+        <li>Для внедрения нужны исторические данные АСУ ТП и журналы ремонтов предприятия.</li>
+      </ul></div>
+    </div>
+    <p class="muted" id="foot"></p>
+  </section>
+</div>
+
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, d = 3) => (x == null ? "—" : Number(x).toFixed(d));
+  const pct = (x, d = 0) => (x == null ? "—" : (x * 100).toFixed(d) + "%");
+  const rub = (x) => Math.round(x).toLocaleString("ru-RU") + " ₽";
+  const mln = (x) => (x / 1e6).toLocaleString("ru-RU", { maximumFractionDigits: 1, minimumFractionDigits: 1 }) + " млн ₽";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  const TYPE_RU = { "Нет отказа": "Нет отказа", TWF: "Износ инструмента", HDF: "Перегрев", PWF: "Мощность вне допуска", OSF: "Перегрузка", "Прочее": "Случайный отказ" };
+  const TYPE_CODE = { L: 0, M: 1, H: 2 };
+  const OSF_LIMIT = { L: 11000, M: 12000, H: 13000 };
+
+  const best = D.binary_test.find((r) => r["Модель"] === D.best_binary);
+  const bestCv = D.binary_cv.find((r) => r["Модель"] === D.best_binary);
+  const bestMc = D.multiclass.find((r) => r["Модель"] === D.best_multiclass);
+  const baseline = D.binary_test.find((r) => r["Модель"] === "Logistic Regression");
+  const total = D.dataset.test_rows;
+
+  // ---------- header ----------
+  $("plate").innerHTML = [
+    ["Датасет", D.dataset.name], ["Записей", D.dataset.rows.toLocaleString("ru-RU")],
+    ["Отказов", `${D.dataset.failures} (${pct(D.dataset.failure_rate, 1)})`], ["Модель риска", D.best_binary], ["Модель диагноза", D.best_multiclass],
+  ].map(([k, v]) => `<span>${k}: <b>${esc(v)}</b></span>`).join("");
+  const nFail = best.TP + best.FN;
+  const kBase = nFail * D.costs.unplanned;
+  const kSys = best.TP * D.costs.planned + best.FP * D.costs.false_alarm + best.FN * D.costs.unplanned;
+  const bestBiz = { "Экономия, %": (kBase - kSys) / kBase, "Экономия, руб.": kBase - kSys };
+  $("kpis").innerHTML = [
+    [pct(best["Recall (доля пойманных отказов)"]), "отказов предсказано заранее", `${best.TP} из ${nFail} на тесте`],
+    [pct(best["Precision (точность тревог)"]), "тревог подтвердились", `${best.FP} ложных на ${total.toLocaleString("ru-RU")} записей`],
+    [pct(bestMc["Верно определён тип среди реальных отказов"]), "верно названа причина", "среди реальных отказов"],
+    [pct(bestBiz["Экономия, %"]), "снижение затрат на отказы", `${mln(bestBiz["Экономия, руб."])} на тестовой выборке`],
+  ].map(([v, l, s]) => `<div class="kpi"><span class="v">${v}</span><span class="l">${l}</span><span class="s">${s}</span></div>`).join("");
+
+  // ---------- in-browser model ----------
+  const M = D.demo_model;
+  function evalTree(nodes, x) {
+    let i = 0;
+    for (;;) {
+      const n = nodes[i];
+      if (n[0] === -1) return n[1];
+      i = x[n[0]] <= n[1] ? n[2] : n[3];
+    }
+  }
+  function predict(s) {
+    const tc = TYPE_CODE[s.type];
+    const diff = s.proc - s.air, power = s.torque * s.rpm * 2 * Math.PI / 60, strain = s.wear * s.torque;
+    const x = [tc, s.air, s.proc, s.rpm, s.torque, s.wear, diff, power, strain];
+    let raw = 0;
+    for (const t of M.binary.trees) raw += evalTree(t, x);
+    const risk = 1 / (1 + Math.exp(-raw));
+    const K = M.multiclass.classes.length, z = new Array(K).fill(0);
+    M.multiclass.trees.forEach((t, i) => { z[i % K] += evalTree(t, x); });
+    const mx = Math.max(...z), e = z.map((v) => Math.exp(v - mx)), se = e.reduce((a, b) => a + b, 0);
+    const probs = {}; M.multiclass.classes.forEach((c, i) => (probs[c] = e[i] / se));
+    return { risk, probs, diff, power, strain };
+  }
+  const THR = M.quality.threshold;
+  const WATCH = THR / 3;
+
+  // ---------- simulator ----------
+  const R = D.ranges;
+  const SL = [
+    { k: "air", f: "air_temp_k", l: "Температура воздуха, K", step: 0.1, d: 1 },
+    { k: "proc", f: "process_temp_k", l: "Температура процесса, K", step: 0.1, d: 1 },
+    { k: "rpm", f: "rpm", l: "Обороты шпинделя, об/мин", step: 1, d: 0 },
+    { k: "torque", f: "torque_nm", l: "Крутящий момент, Нм", step: 0.1, d: 1 },
+    { k: "wear", f: "tool_wear_min", l: "Наработка инструмента, мин", step: 1, d: 0 },
+  ];
+  const S = { type: "L", air: 300, proc: 310, rpm: 1500, torque: 40, wear: 100 };
+  $("sliders").innerHTML = SL.map((s) => `<div class="field"><div class="row"><label for="s-${s.k}">${s.l}</label><output id="o-${s.k}"></output></div>
+    <input type="range" id="s-${s.k}" min="${R[s.f][0]}" max="${R[s.f][1]}" step="${s.step}"></div>`).join("");
+  const PRESETS = [
+    { n: "Штатный режим", s: { type: "M", air: 300, proc: 310, rpm: 1500, torque: 40, wear: 90 } },
+    { n: "Износ инструмента", s: { type: "H", air: 300, proc: 310, rpm: 1400, torque: 30, wear: 233 } },
+    { n: "Перегрев", s: { type: "L", air: 302.6, proc: 310.6, rpm: 1310, torque: 50, wear: 80 } },
+    { n: "Мощность вне допуска", s: { type: "L", air: 299, proc: 309.5, rpm: 2700, torque: 11, wear: 60 } },
+    { n: "Перегрузка", s: { type: "L", air: 300, proc: 310, rpm: 1320, torque: 58, wear: 205 } },
+  ];
+  $("presets").innerHTML = PRESETS.map((p, i) => `<button type="button" class="chip" id="pr-${i}" data-i="${i}" aria-pressed="false">${p.n}</button>`).join("");
+  function setPreset(i) {
+    document.querySelectorAll("#presets .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.i == i)));
+  }
+  $("presets").addEventListener("click", (e) => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    Object.assign(S, PRESETS[+b.dataset.i].s); setPreset(+b.dataset.i); syncInputs(); render();
+  });
+  $("type-seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return; S.type = b.dataset.v; setPreset(-1); syncInputs(); render();
+  });
+  SL.forEach((s) => $("s-" + s.k).addEventListener("input", (e) => { S[s.k] = +e.target.value; setPreset(-1); render(); }));
+  function syncInputs() {
+    SL.forEach((s) => ($("s-" + s.k).value = S[s.k]));
+    ["L", "M", "H"].forEach((t) => $("t-" + t).setAttribute("aria-pressed", String(S.type === t)));
+  }
+  function statusOf(risk) {
+    if (risk >= THR) return ["st-crit", "Тревога"];
+    if (risk >= WATCH) return ["st-warn", "Наблюдение"];
+    return ["st-ok", "Норма"];
+  }
+  function render() {
+    SL.forEach((s) => ($("o-" + s.k).textContent = Number(S[s.k]).toFixed(s.d)));
+    const p = predict(S);
+    $("risk-num").textContent = (p.risk * 100).toFixed(p.risk < 0.1 ? 1 : 0);
+    const [cls, lbl] = statusOf(p.risk);
+    const st = $("status"); st.className = "status " + cls; st.textContent = lbl;
+    $("risk-fill").style.width = (p.risk * 100).toFixed(1) + "%";
+    $("risk-fill").style.background = css(cls === "st-crit" ? "--crit" : cls === "st-warn" ? "--warn" : "--ok");
+    $("risk-mark").style.left = (THR * 100).toFixed(1) + "%";
+    $("thr-lbl").textContent = "порог тревоги " + pct(THR);
+    const fails = ["TWF", "HDF", "PWF", "OSF", "Прочее"];
+    const sum = fails.reduce((a, c) => a + (p.probs[c] || 0), 0);
+    const cond = fails.map((c) => [c, (p.probs[c] || 0) / sum]).sort((a, b) => b[1] - a[1]);
+    $("type-bars").innerHTML = cond.map(([c, v], i) => `<div class="bar"><span>${c === "Прочее" ? "Прочее" : c} · ${TYPE_RU[c]}</span><span class="track"><i style="width:${(v * 100).toFixed(1)}%;background:${i === 0 ? css("--accent") : css("--bar-muted")}"></i></span><span class="val">${pct(v)}</span></div>`).join("");
+    const top = cond[0][0];
+    $("rec").textContent = cls === "st-crit" ? `Остановить на плановое ТО. Вероятная причина: ${TYPE_RU[top].toLowerCase()}.`
+      : cls === "st-warn" ? `Повышенный риск. Проверить на ближайшем обходе, в первую очередь: ${TYPE_RU[top].toLowerCase()}.`
+      : "Станок работает в штатном режиме. Вмешательство не требуется.";
+    const lim = OSF_LIMIT[S.type];
+    const ind = [
+      ["Разница температур (HDF)", p.diff.toFixed(1) + " K", p.diff < 8.6 && S.rpm < 1380 ? ["bad", "< 8.6 K при оборотах < 1380: риск перегрева"] : p.diff < 9.2 ? ["near", "близко к границе 8.6 K"] : ["good", "теплоотвод в норме"]],
+      ["Мощность (PWF)", Math.round(p.power).toLocaleString("ru-RU") + " Вт", p.power < 3500 || p.power > 9000 ? ["bad", "вне допуска 3 500–9 000 Вт"] : p.power < 3900 || p.power > 8500 ? ["near", "у границы допуска"] : ["good", "в допуске 3 500–9 000 Вт"]],
+      ["Нагрузка на инструмент (OSF)", Math.round(p.strain).toLocaleString("ru-RU") + " Нм·мин", p.strain > lim ? ["bad", `выше предела ${lim.toLocaleString("ru-RU")} для класса ${S.type}`] : p.strain > lim * 0.9 ? ["near", `близко к пределу ${lim.toLocaleString("ru-RU")}`] : ["good", `предел ${lim.toLocaleString("ru-RU")} для класса ${S.type}`]],
+      ["Наработка инструмента (TWF)", S.wear + " мин", S.wear >= 200 ? ["bad", "зона замены 200–240 мин"] : S.wear >= 180 ? ["near", "скоро зона замены"] : ["good", "до замены > 20 мин"]],
+    ];
+    $("ind").innerHTML = ind.map(([n, x, [c, r]]) => `<div><span class="n">${n}</span><span class="x">${x}</span><span class="r ${c}">${r}</span></div>`).join("");
+  }
+  Object.assign(S, PRESETS[0].s); setPreset(0); syncInputs(); render();
+
+  // ---------- fleet ----------
+  const fleetStatus = (r) => (r >= D.threshold ? "alarm" : r >= D.threshold / 3 ? "watch" : "ok");
+  const ST_LBL = { alarm: ["st-crit", "Тревога"], watch: ["st-warn", "Наблюдение"], ok: ["st-ok", "Норма"] };
+  const nAlarm = D.fleet.filter((f) => fleetStatus(f.risk) === "alarm").length;
+  $("fleet-lede").textContent = `Выборка из ${D.fleet.length} станков отложенной выборки с прогнозом модели «${D.best_binary}». Сверху самые рискованные. Столбец «Факт» показывает, был ли отказ на самом деле. Клик по строке загрузит режим станка в симулятор.`;
+  let filt = "all";
+  function renderFleet() {
+    const rows = D.fleet.filter((f) => filt === "all" || (filt === "fail" ? f.actual === 1 : fleetStatus(f.risk) === filt));
+    $("fleet-count").textContent = `Показано ${rows.length} из ${D.fleet.length} · в тревоге ${nAlarm}`;
+    $("fleet").querySelector("tbody").innerHTML = rows.map((f) => {
+      const s = fleetStatus(f.risk), [c, l] = ST_LBL[s];
+      const col = css(s === "alarm" ? "--crit" : s === "watch" ? "--warn" : "--ok");
+      const fact = f.actual ? (s === "alarm" ? `<span class="tag hit">отказ · ${f.actual_type} · пойман</span>` : `<span class="tag miss">отказ · ${f.actual_type} · пропущен</span>`)
+        : (s === "alarm" ? `<span class="tag fa">норма · ложная тревога</span>` : `<span class="tag" style="color:var(--ink-3)">норма</span>`);
+      return `<tr tabindex="0" data-id="${esc(f.id)}"><td class="mono">${esc(f.id)}</td><td class="mono">${f.type}</td><td class="num">${f.wear}</td><td class="num">${f.torque.toFixed(1)}</td><td class="num">${f.rpm}</td><td class="num">${(f.proc - f.air).toFixed(1)}</td>
+        <td class="num"><span class="riskcell">${pct(f.risk, 1)}<span class="t"><i style="width:${(f.risk * 100).toFixed(1)}%;background:${col}"></i></span></span></td>
+        <td><span class="status ${c}">${l}</span></td><td>${s === "ok" ? '<span style="color:var(--ink-3)">—</span>' : f.pred_type === "Нет отказа" ? "не определена" : f.pred_type + " · " + TYPE_RU[f.pred_type]}</td><td>${fact}</td></tr>`;
+    }).join("");
+  }
+  $("fleet-filter").addEventListener("click", (e) => {
+    const b = e.target.closest(".chip"); if (!b) return; filt = b.dataset.f;
+    document.querySelectorAll("#fleet-filter .chip").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); renderFleet();
+  });
+  function loadRow(tr) {
+    const f = D.fleet.find((x) => x.id === tr.dataset.id); if (!f) return;
+    Object.assign(S, { type: f.type, air: f.air, proc: f.proc, rpm: f.rpm, torque: f.torque, wear: f.wear });
+    setPreset(-1); syncInputs(); render(); $("sim-sec").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  $("fleet").addEventListener("click", (e) => { const tr = e.target.closest("tbody tr"); if (tr) loadRow(tr); });
+  $("fleet").addEventListener("keydown", (e) => { if (e.key === "Enter") { const tr = e.target.closest("tbody tr"); if (tr) loadRow(tr); } });
+  renderFleet();
+
+  // ---------- economics ----------
+  const P = D.test_probs.risk, Y = D.test_probs.y;
+  $("c-fn").value = D.costs.unplanned; $("c-tp").value = D.costs.planned; $("c-fp").value = D.costs.false_alarm;
+  function counts(t) {
+    let tp = 0, fp = 0, fn = 0, tn = 0;
+    for (let i = 0; i < P.length; i++) { const a = P[i] >= t; if (Y[i]) a ? tp++ : fn++; else a ? fp++ : tn++; }
+    return { tp, fp, fn, tn };
+  }
+  function costAt(t, c) { const k = counts(t); return k.tp * c.tp + k.fp * c.fp + k.fn * c.fn; }
+  function costs() { return { fn: +$("c-fn").value || 0, tp: +$("c-tp").value || 0, fp: +$("c-fp").value || 0 }; }
+  function bestCostThr() {
+    const c = costs(); let bt = 0.5, bc = Infinity;
+    for (let t = 0.01; t <= 0.99; t += 0.01) { const v = costAt(t, c); if (v < bc) { bc = v; bt = t; } }
+    return Math.round(bt * 100) / 100;
+  }
+  function renderEcon() {
+    const t = +$("thr").value, k = counts(t), c = costs();
+    $("thr-out").textContent = t.toFixed(2);
+    $("m-tp").textContent = k.tp; $("m-fn").textContent = k.fn; $("m-fp").textContent = k.fp; $("m-tn").textContent = k.tn.toLocaleString("ru-RU");
+    const base = (k.tp + k.fn) * c.fn, sys = k.tp * c.tp + k.fp * c.fp + k.fn * c.fn;
+    $("e-base").textContent = mln(base); $("e-sys").textContent = mln(sys);
+    $("e-save").textContent = (base - sys >= 0 ? "" : "−") + mln(Math.abs(base - sys));
+    $("e-save").style.color = css(base - sys >= 0 ? "--ok" : "--crit");
+    const rec = k.tp / Math.max(1, k.tp + k.fn), prec = k.tp / Math.max(1, k.tp + k.fp);
+    $("e-note").textContent = `Поймано ${pct(rec)} отказов, подтвердилось ${pct(prec)} тревог. Экономия ${pct(base ? (base - sys) / base : 0)} от затрат на аварийные ремонты на ${total.toLocaleString("ru-RU")} записях теста.`;
+  }
+  $("thr").value = Math.round(D.threshold * 100) / 100;
+  $("thr").addEventListener("input", renderEcon);
+  ["c-fn", "c-tp", "c-fp"].forEach((id) => $(id).addEventListener("input", renderEcon));
+  $("thr-f1").addEventListener("click", () => { $("thr").value = Math.round(D.threshold * 100) / 100; renderEcon(); });
+  $("thr-cost").addEventListener("click", () => { $("thr").value = bestCostThr(); renderEcon(); });
+  renderEcon();
+
+  // ---------- model charts ----------
+  const NS = "http://www.w3.org/2000/svg";
+  const short = (n) => n.replace("Ансамбль (soft voting: ", "Ансамбль (").replace(/\(tuned\)/, "· tuned");
+  const sorted = [...D.binary_test].sort((a, b) => b["PR-AUC"] - a["PR-AUC"]);
+  (function barChart() {
+    const W = 560, rowH = 22, padL = 230, padR = 50, H = sorted.length * rowH + 30;
+    const x = (v) => padL + v * (W - padL - padR);
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:460px" role="img" aria-label="PR-AUC моделей">`;
+    [0, 0.25, 0.5, 0.75, 1].forEach((t) => { s += `<line class="gridl" x1="${x(t)}" x2="${x(t)}" y1="0" y2="${H - 22}"/><text x="${x(t)}" y="${H - 6}" text-anchor="middle">${t.toFixed(2)}</text>`; });
+    sorted.forEach((r, i) => {
+      const y = i * rowH + 4, isB = r["Модель"] === D.best_binary;
+      const nm = short(r["Модель"]); const lbl = nm.length > 34 ? nm.slice(0, 33) + "…" : nm;
+      s += `<text x="${padL - 8}" y="${y + 12}" text-anchor="end" style="${isB ? "font-weight:600;fill:var(--ink)" : ""}">${esc(lbl)}</text>`;
+      s += `<rect x="${padL}" y="${y + 2}" width="${Math.max(1, x(r["PR-AUC"]) - padL)}" height="${rowH - 8}" rx="2" fill="${isB ? "var(--accent)" : "var(--bar-muted)"}"/>`;
+      s += `<text x="${x(r["PR-AUC"]) + 5}" y="${y + 12}">${fmt(r["PR-AUC"])}</text>`;
+    });
+    $("ch-models").innerHTML = s + "</svg>";
+  })();
+  (function prChart() {
+    const names = Object.keys(D.curves);
+    const pal = ["--accent", "--ok", "--warn", "--crit", "--ink-2", "--ink-3"];
+    const W = 460, H = 320, pl = 44, pr = 12, pt = 10, pb = 36;
+    const x = (v) => pl + v * (W - pl - pr), y = (v) => pt + (1 - v) * (H - pt - pb);
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:340px" role="img" aria-label="PR-кривые">`;
+    [0, 0.25, 0.5, 0.75, 1].forEach((t) => {
+      s += `<line class="gridl" x1="${pl}" x2="${W - pr}" y1="${y(t)}" y2="${y(t)}"/><text x="${pl - 6}" y="${y(t) + 4}" text-anchor="end">${t.toFixed(2)}</text>`;
+      s += `<text x="${x(t)}" y="${H - pb + 16}" text-anchor="middle">${t.toFixed(2)}</text>`;
+    });
+    s += `<text x="${(pl + W - pr) / 2}" y="${H - 4}" text-anchor="middle">Recall — доля пойманных отказов</text>`;
+    s += `<text transform="translate(11 ${(pt + H - pb) / 2}) rotate(-90)" text-anchor="middle">Precision</text>`;
+    names.slice().reverse().forEach((n) => {
+      const i = names.indexOf(n), pts = D.curves[n].pr.map(([r, p]) => `${x(r).toFixed(1)},${y(p).toFixed(1)}`).join(" ");
+      s += `<polyline points="${pts}" fill="none" stroke="var(${pal[i % pal.length]})" stroke-width="${n === D.best_binary ? 2.6 : 1.4}" stroke-linejoin="round"/>`;
+    });
+    $("ch-pr").innerHTML = s + "</svg>";
+    $("pr-legend").innerHTML = names.map((n, i) => `<span><i style="background:var(${pal[i % pal.length]})"></i>${esc(short(n))}</span>`).join("");
+  })();
+  (function table() {
+    const cols = [["Модель", "Модель"], ["PR-AUC", "PR-AUC"], ["ROC-AUC", "ROC-AUC"], ["Recall (доля пойманных отказов)", "Recall"], ["Precision (точность тревог)", "Precision"], ["F1", "F1"], ["MCC", "MCC"], ["CV", "CV PR-AUC"], ["Время обучения, с", "Обучение, с"]];
+    $("mtable").querySelector("thead").innerHTML = "<tr>" + cols.map(([k, l], i) => `<th class="${i ? "num" : ""}">${l}</th>`).join("") + "</tr>";
+    $("mtable").querySelector("tbody").innerHTML = sorted.map((r) => {
+      const cv = D.binary_cv.find((c) => c["Модель"] === r["Модель"]);
+      const isB = r["Модель"] === D.best_binary;
+      return `<tr style="cursor:default;${isB ? "background:var(--accent-soft);font-weight:600" : ""}">` + cols.map(([k], i) => {
+        if (!i) return `<td>${esc(short(r[k]))}</td>`;
+        if (k === "CV") return `<td class="num">${fmt(cv["CV PR-AUC (mean)"])} ± ${fmt(cv["CV PR-AUC (std)"])}</td>`;
+        if (k.startsWith("Время")) return `<td class="num">${fmt(r[k], 2)}</td>`;
+        return `<td class="num">${fmt(r[k])}</td>`;
+      }).join("") + "</tr>";
+    }).join("");
+    $("models-lede").textContent = `Сравнили ${D.binary_test.length} моделей: от логистической регрессии до бустингов с подбором гиперпараметров и ансамбля. Лучшая по кросс-валидации — «${D.best_binary}», её PR-AUC на тесте ${fmt(best["PR-AUC"])} против ${fmt(baseline["PR-AUC"])} у базовой логистической регрессии.`;
+  })();
+
+  // ---------- multiclass ----------
+  const pcls = D.per_class.filter((r) => !["accuracy", "macro avg", "weighted avg"].includes(r["Класс"]));
+  $("mc-bars").innerHTML = pcls.map((r) => `<div class="bar"><span>${esc(r["Класс"].split(" — ")[0])} · ${esc((r["Класс"].split(" — ")[1] || "").replace(/^./, (c) => c.toUpperCase()) || "")}</span><span class="track"><i style="width:${(r.Recall * 100).toFixed(1)}%"></i></span><span class="val">${pct(r.Recall)}</span></div>`).join("")
+    + `<p class="muted">Число случаев в тесте: ${pcls.map((r) => r["Класс"].split(" — ")[0] + " " + r["Кол-во в тесте"]).join(", ")}.</p>`;
+  (function cm() {
+    const L = D.cm_multiclass.labels, V = D.cm_multiclass.values;
+    let h = `<tr><th class="rowh">Факт \\ Прогноз</th>${L.map((l) => `<th>${esc(l)}</th>`).join("")}</tr>`;
+    V.forEach((row, i) => {
+      const rs = row.reduce((a, b) => a + b, 0);
+      h += `<tr><th class="rowh">${esc(l2(L[i]))}</th>` + row.map((v, j) => {
+        const share = rs ? v / rs : 0;
+        const bg = v === 0 ? "transparent" : i === j ? `color-mix(in srgb, var(--ok) ${Math.round(15 + share * 55)}%, transparent)` : `color-mix(in srgb, var(--crit) ${Math.round(12 + share * 60)}%, transparent)`;
+        return `<td style="background:${bg}">${v}</td>`;
+      }).join("") + "</tr>";
+    });
+    function l2(x) { return x; }
+    $("cm").innerHTML = h;
+  })();
+  $("mc-lede").textContent = `Модель «${D.best_multiclass}»: macro-F1 на тесте ${fmt(bestMc["Test Macro-F1"])}, верный тип назван в ${pct(bestMc["Верно определён тип среди реальных отказов"])} реальных отказов. Хуже всего определяются износ инструмента и случайные отказы: они слабо проявляются в показаниях датчиков.`;
+
+  // ---------- feature importance ----------
+  const fmax = Math.max(...D.feature_importance.map((f) => f.value));
+  $("fi").innerHTML = D.feature_importance.map((f, i) => `<div class="bar" style="grid-template-columns:minmax(0,32ch) minmax(0,1fr) 6ch"><span>${esc(f.label)}</span><span class="track"><i style="width:${(Math.max(0, f.value) / fmax * 100).toFixed(1)}%;background:${i < 3 ? css("--accent") : css("--bar-muted")}"></i></span><span class="val">${fmt(f.value)}</span></div>`).join("");
+
+  // ---------- notes ----------
+  const tc = D.dataset.type_counts;
+  $("n-data").innerHTML = [
+    `<a href="https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset" target="_blank" rel="noopener">AI4I 2020 Predictive Maintenance</a>, UCI ML Repository, лицензия CC BY 4.0.`,
+    `${D.dataset.rows.toLocaleString("ru-RU")} записей фрезерного станка, 6 сенсорных параметров.`,
+    `Отказов ${D.dataset.failures} (${pct(D.dataset.failure_rate, 1)}): HDF ${tc.HDF || 0}, OSF ${tc.OSF || 0}, PWF ${tc.PWF || 0}, TWF ${tc.TWF || 0}, прочие ${tc["Прочее"] || 0}.`,
+    `Добавлены 3 физических признака: ΔT, мощность, нагрузка на инструмент.`,
+  ].map((x) => `<li>${x}</li>`).join("");
+  $("foot").textContent = `Симулятор использует компактную копию модели LightGBM (PR-AUC ${fmt(M.quality.pr_auc)}, ROC-AUC ${fmt(M.quality.roc_auc)} на тесте), чтобы считать прогноз прямо в браузере. Таблица парка и экономика построены на прогнозах основной модели «${D.best_binary}».`;
+})();
+</script>

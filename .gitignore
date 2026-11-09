@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.claude/
+catboost_info/
+results_run.log
+data/raw/*.zip
+demo/_artifact_body.html
+.DS_Store
